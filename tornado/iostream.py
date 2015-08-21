@@ -726,7 +726,7 @@ class BaseIOStream(object):
         error closes the socket and raises an exception.
         """
         try:
-            chunk = self.read_from_fd()
+            chunk = self._recoverable_read_from_fd()
         except (socket.error, IOError, OSError) as e:
             # ssl.SSLError is a subclass of socket.error
             if self._is_connreset(e):
@@ -746,6 +746,15 @@ class BaseIOStream(object):
             self.close()
             raise StreamBufferFullError("Reached maximum read buffer size")
         return len(chunk)
+
+    def _recoverable_read_from_fd(self):
+        while True:
+            try:
+                return self.read_from_fd()
+            except socket.error as e:
+                if e.args[0] == errno.EINTR:
+                    continue
+                raise
 
     def _run_streaming_callback(self):
         if self._streaming_callback is not None and self._read_buffer_size:
